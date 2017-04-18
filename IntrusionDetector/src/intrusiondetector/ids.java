@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Hashtable;
 import java.util.regex.Pattern;  
 import org.jnetpcap.Pcap;   
 import org.jnetpcap.packet.JPacket;  
@@ -28,37 +29,25 @@ public class ids {
     private static Boolean proto;                   //True = TCP False = UDP 
     private static String host;
     private static int hostPort = -1;                    // -1 = any
-    private static String toHost1;
-    private static String fromHost1;
-    private static String toHost2;
-    private static String fromHost2;
-    private static String toHost3;
-    private static String fromHost3;
-    private static String toHost4;
-    private static String fromHost4;
+    private static final Hashtable<Integer, String> tfHost = new Hashtable<>(); //stores to/from_host strings
+    private static boolean fromHostFirst = false;                               // True if from_host is first in .txt file
     private static int attackerPort = -1;               // -1 = any
     private static int attacker;                    //wait on email reply assume always any until then
-    private static int numToFind = 1;               //number of feilds to find in packet before a warning is thrown
+    private static int numToFind = 0;               //number of feilds to find in packet before a warning is thrown
     
-    private static Pattern hostP = Pattern.compile("host=(\\d*\\.\\d*\\.\\d*\\.\\d*)");
-    private static Pattern portP = Pattern.compile("host_port=(\\d{1,5})");
-    private static Pattern attackerPortP = Pattern.compile("attacker_port=(\\d{1,5})");
-    private static Pattern toHostP1 = Pattern.compile("to_host=(\"(.*?)\")");
-    private static Pattern fromHostP1 = Pattern.compile("from_host=(\"(.*?)\")");
-    private static Pattern toHostP2 = Pattern.compile("to_host=(\"(.*?)\")");
-    private static Pattern fromHostP2 = Pattern.compile("from_host=(\"(.*?)\")");
-    private static Pattern toHostP3 = Pattern.compile("to_host=(\"(.*?)\")");
-    private static Pattern fromHostP3 = Pattern.compile("from_host=(\"(.*?)\")");
-    private static Pattern toHostP4 = Pattern.compile("to_host=(\"(.*?)\")");
-    private static Pattern fromHostP4 = Pattern.compile("from_host=(\"(.*?)\")");
-    private static Pattern protoP = Pattern.compile("proto=(tcp|udp)");
-    private static Pattern typeP = Pattern.compile("type=(s.*)");
+    private static final Pattern hostP = Pattern.compile("host=(\\d*\\.\\d*\\.\\d*\\.\\d*)");
+    private static final Pattern portP = Pattern.compile("host_port=(\\d{1,5})");
+    private static final Pattern attackerPortP = Pattern.compile("attacker_port=(\\d{1,5})");
+    private static final Pattern toHostP = Pattern.compile("to_host=(\"(.*?)\")");
+    private static final Pattern fromHostP = Pattern.compile("from_host=(\"(.*?)\")");
+    private static final Pattern protoP = Pattern.compile("proto=(tcp|udp)");
+    private static final Pattern typeP = Pattern.compile("type=(s.*)");
      
     
     public static void main(String[] args) throws IOException {
         
-        String fileName = "trace1.pcap";   //Replace with command line Args
-        String policyFileName = "plaintextPOP.txt";     //Replace with command line Args
+        String fileName = "trace5.pcap";   //Replace with command line Args
+        String policyFileName = "linuxBoot.txt";     //Replace with command line Args
         
         final StringBuilder errbuf = new StringBuilder();
         Pcap pcap = Pcap.openOffline(fileName, errbuf);
@@ -74,67 +63,113 @@ public class ids {
             //stateless(pcap, errbuf); was going to put this in its own method but jnetpcap wont let me
             pcap.loop(-1, new JPacketHandler<StringBuilder>() {                 //loop thu all the pkts
             
-            final Tcp tcp = new Tcp();
-            final Udp udp = new Udp();
-            //final Ip4 ip = new Ip4();
-  
-            @Override
-            public void nextPacket(JPacket packet, StringBuilder errbuf) {  
-                int numFound = 0;
-                if(proto){  //looking for tcp
-                    if (packet.hasHeader(tcp) && (tcp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {        
-                        try {
+                final Tcp tcp = new Tcp();
+                final Udp udp = new Udp();
+                @Override
+                public void nextPacket(JPacket packet, StringBuilder errbuf) {  
+                    int numFound = 0;
+                    if(proto){  //looking for tcp
+                        if (packet.hasHeader(tcp) && (tcp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {        
+
+                            Pattern p0 = Pattern.compile(tfHost.get(0));
                             byte[] content = tcp.getPayload();
-                            String contentStr = new String(content, "UTF-8");
-                            //make patterns and matchers for all toHosts and fromHosts
-                            Pattern toFind1 = Pattern.compile(toHost1);
-                            Pattern toFind2 = Pattern.compile(fromHost1);
-                            Pattern toFind3 = Pattern.compile(toHost2);
-                            Pattern toFind4 = Pattern.compile(fromHost2);
-                            Pattern toFind5 = Pattern.compile(toHost3);
-                            Pattern toFind6 = Pattern.compile(fromHost4);
-                            Pattern toFind7 = Pattern.compile(toHost4);
-                            Pattern toFind8 = Pattern.compile(fromHost4); 
-                            Matcher toHost1 = toFind1.matcher(contentStr); 
-                            Matcher toHost2 = toFind3.matcher(contentStr); 
-                            Matcher toHost3 = toFind5.matcher(contentStr); 
-                            Matcher toHost4 = toFind7.matcher(contentStr); 
-                            Matcher fromHost1 = toFind2.matcher(contentStr); 
-                            Matcher fromHost2 = toFind4.matcher(contentStr); 
-                            Matcher fromHost3 = toFind6.matcher(contentStr); 
-                            Matcher fromHost4 = toFind8.matcher(contentStr);
-                            
-                            
-                            if(toHost1.find()){
-                                
+                            byte[] delim = "\\n".getBytes();
+                            String[] contentStr = new String(content).split(new String(delim));
+                            for (int i = 0; i < contentStr.length; i++) {
+
+                                Matcher m0 = p0.matcher(contentStr[i]);
+                                if (m0.find() && tfHost.get(numFound+1) == null) {
+                                    warn(tcp.toString());
+                                }
+                                else if(m0.find()){
+                                    numFound++;
+                                    Pattern p1 = Pattern.compile(tfHost.get(numFound));
+                                    Matcher m1 = p1.matcher(contentStr[i+numFound]);
+                                    if (m1.find() && tfHost.get(numFound+1) == null) {
+                                        warn(tcp.toString());
+                                    }
+                                    else if(m1.find()){
+                                        numFound++;
+                                        Pattern p2 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m2 = p1.matcher(contentStr[i+numFound]);
+                                        if (m2.find() && tfHost.get(numFound+1) == null) {
+                                            warn(tcp.toString());
+                                        }
+                                        else if(m2.find()){
+                                            numFound++;
+                                            Pattern p3 = Pattern.compile(tfHost.get(numFound));
+                                            Matcher m3 = p1.matcher(contentStr[i+numFound]);
+                                            if (m3.find() && tfHost.get(numFound+1) == null) {
+                                                warn(tcp.toString());
+                                            }
+                                            else if(m3.find()){
+                                                numFound++;
+                                                Pattern p4 = Pattern.compile(tfHost.get(numFound));
+                                                Matcher m4 = p1.matcher(contentStr[i+numFound]);
+                                                if (m4.find() && tfHost.get(numFound+1) == null) {
+                                                    warn(tcp.toString());
+                                                }   
+                                            }
+                                        }
+                                        
+                                    }
+                                }
                             }
-                            //System.out.println(contentStr);
-                            
-                        } catch (UnsupportedEncodingException ex) {
-                            Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
-                }
-                else{
-                    if (packet.hasHeader(udp) && (udp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {
-                        try {
+                    else{
+                        if (packet.hasHeader(udp) && (udp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {
+                            Pattern p0 = Pattern.compile(tfHost.get(0));
                             byte[] content = udp.getPayload();
-                            String contentStr = new String(content, "UTF-8");
-                            Pattern toFind = Pattern.compile(toHost1); 
-                            Matcher toHost = toFind.matcher(contentStr);
-                            if(toHost.find()){
-                                System.out.println("WARNING -- Possible threat" + udp.toString());
+                            byte[] delim = "\\n".getBytes();
+                            String[] contentStr = new String(content).split(new String(delim));
+                            for (int i = 0; i < contentStr.length; i++) {
+
+                                Matcher m0 = p0.matcher(contentStr[i]);
+                                if (m0.find() && tfHost.get(numFound+1) == null) {
+                                    warn(udp.toString());
+                                }
+                                else if(m0.find()){
+                                    numFound++;
+                                    Pattern p1 = Pattern.compile(tfHost.get(numFound));
+                                    Matcher m1 = p1.matcher(contentStr[i+numFound]);
+                                    if (m1.find() && tfHost.get(numFound+1) == null) {
+                                        warn(udp.toString());
+                                    }
+                                    else if(m1.find()){
+                                        numFound++;
+                                        Pattern p2 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m2 = p1.matcher(contentStr[i+numFound]);
+                                        if (m2.find() && tfHost.get(numFound+1) == null) {
+                                            warn(udp.toString());
+                                        }
+                                        else if(m2.find()){
+                                            numFound++;
+                                            Pattern p3 = Pattern.compile(tfHost.get(numFound));
+                                            Matcher m3 = p1.matcher(contentStr[i+numFound]);
+                                            if (m3.find() && tfHost.get(numFound+1) == null) {
+                                                warn(udp.toString());
+                                            }
+                                            else if(m3.find()){
+                                                numFound++;
+                                                Pattern p4 = Pattern.compile(tfHost.get(numFound));
+                                                Matcher m4 = p1.matcher(contentStr[i+numFound]);
+                                                if (m4.find() && tfHost.get(numFound+1) == null) {
+                                                    warn(udp.toString());
+                                                }   
+                                            }
+                                        }
+                                        
+                                    }
+                                }
                             }
-                        } catch (UnsupportedEncodingException ex) {
-                            Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
                         }
                     }
-                }
-            }  
-        }, errbuf); 
+                }  
+            }, errbuf); 
         }
         else{
-            stateful();
+            //stateful();
         }
     }
     ///sets all policy parameter instance vars
@@ -147,14 +182,8 @@ public class ids {
             Matcher protoM = protoP.matcher(line);
             Matcher portM = portP.matcher(line);
             Matcher attackerPortM = attackerPortP.matcher(line);
-            Matcher toHostM1 = toHostP1.matcher(line);
-            Matcher fromHostM1 = fromHostP1.matcher(line);
-            Matcher toHostM2 = toHostP2.matcher(line);
-            Matcher fromHostM2 = fromHostP2.matcher(line);
-            Matcher toHostM3 = toHostP3.matcher(line);
-            Matcher fromHostM3 = fromHostP3.matcher(line);
-            Matcher toHostM4 = toHostP4.matcher(line);
-            Matcher fromHostM4 = fromHostP4.matcher(line);
+            Matcher toHostM = toHostP.matcher(line);
+            Matcher fromHostM = fromHostP.matcher(line);
             
             if (hostM.find()) {
                 host = hostM.group(1);
@@ -177,30 +206,16 @@ public class ids {
                 attackerPort = Integer.parseInt(attackerPortM.group(1));
             }
             
-            if (toHostM1.find() && toHost1 == null) {
-                toHost1 = toHostM1.group(1);
+            if (toHostM.find()) {
+                tfHost.put(numToFind, toHostM.group(1));
+                numToFind++;
             }
-            else if (toHostM2.find() && toHost2 == null) {
-                toHost2 = toHostM2.group(1);
-            }
-            else if (toHostM3.find() && toHost3 == null) {
-                toHost3 = toHostM3.group(1);
-            }
-            else if (toHostM4.find() && toHost4 == null) {
-                toHost4 = toHostM4.group(1);
-            }
-            
-            if (fromHostM1.find() && fromHost1 == null) {
-                fromHost1 = fromHostM1.group(1);
-            }
-            else if (fromHostM2.find() && fromHost2 == null) {
-                fromHost2 = fromHostM2.group(1);
-            }
-            else if (fromHostM3.find() && fromHost3 == null) {
-                fromHost3 = fromHostM3.group(1);
-            }
-            else if (fromHostM4.find() && fromHost4 == null) {
-                fromHost4 = fromHostM4.group(1);
+            if (fromHostM.find()) {
+                tfHost.put(numToFind, fromHostM.group(1));
+                if(numToFind == 0){
+                    fromHostFirst = true;
+                }
+                numToFind++;
             }
             
             if (protoM.find()) {
@@ -220,35 +235,25 @@ public class ids {
         System.out.println("host: " + host);
         System.out.println("host_port: " + hostPort);
         System.out.println("attacker_port: " + attackerPort);
-        System.out.println("toHost1: " + toHost1);
-        if (!(toHost2 == null)){
-            System.out.println("toHost2: " + toHost2);
-            numToFind++;
+        if(fromHostFirst){
+            for (int i = 0; i < numToFind; i++){
+                if(i % 2 == 0){
+                    System.out.println("from_host: " + tfHost.get(i));
+                }
+                else{
+                    System.out.println("to_host: " + tfHost.get(i));
+                }
+            }
         }
-        if (!(toHost3 == null)){
-            System.out.println("toHost3: " + toHost3);
-            numToFind++;
-        }
-        if (!(toHost4 == null)){
-            System.out.println("toHost4: " + toHost4);
-            numToFind++;
-        }
-        
-        if (!(fromHost1 == null)){
-            System.out.println("fromHost1: " + fromHost1);
-            numToFind++;
-        }
-        if (!(fromHost2 == null)){
-            System.out.println("fromHost4: " + fromHost2);
-            numToFind++;
-        }
-        if (!(fromHost3 == null)){
-            System.out.println("fromHost3: " + fromHost3);
-            numToFind++;
-        }
-        if (!(fromHost4 == null)){
-            System.out.println("fromHost4: " + fromHost4);
-            numToFind++;
+        else{
+            for (int i = 0; i < numToFind; i++){
+                if(i % 2 != 0){
+                    System.out.println("from_host: " + tfHost.get(i));
+                }
+                else{
+                    System.out.println("to_host: " + tfHost.get(i));
+                }
+            }
         }
         
         
@@ -269,71 +274,9 @@ public class ids {
         }
     }
     
-    public static void stateless(Pcap pcap, StringBuilder errbuf){
+    public static void statfull(Pcap pcap, StringBuilder errbuf){
         
-        pcap.loop(-1, new JPacketHandler<StringBuilder>() {                 //loop thu all the pkts
-            
-            final Tcp tcp = new Tcp();
-            final Udp udp = new Udp();
-            final Ip4 ip = new Ip4();
-  
-            @Override
-            public void nextPacket(JPacket packet, StringBuilder errbuf) {  
-                int numFound = 0;
-                if(proto){  //looking for tcp
-                    if (packet.hasHeader(tcp) && (tcp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {        
-                        try {
-                            byte[] content = tcp.getPayload();
-                            String contentStr = new String(content, "UTF-8");
-                            //make patterns and matchers for all toHosts and fromHosts
-                            Pattern toFind1 = Pattern.compile(toHost1);
-                            Pattern toFind2 = Pattern.compile(fromHost1);
-                            Pattern toFind3 = Pattern.compile(toHost2);
-                            Pattern toFind4 = Pattern.compile(fromHost2);
-                            Pattern toFind5 = Pattern.compile(toHost3);
-                            Pattern toFind6 = Pattern.compile(fromHost4);
-                            Pattern toFind7 = Pattern.compile(toHost4);
-                            Pattern toFind8 = Pattern.compile(fromHost4); 
-                            Matcher toHost1 = toFind1.matcher(contentStr); 
-                            Matcher toHost2 = toFind3.matcher(contentStr); 
-                            Matcher toHost3 = toFind5.matcher(contentStr); 
-                            Matcher toHost4 = toFind7.matcher(contentStr); 
-                            Matcher fromHost1 = toFind2.matcher(contentStr); 
-                            Matcher fromHost2 = toFind4.matcher(contentStr); 
-                            Matcher fromHost3 = toFind6.matcher(contentStr); 
-                            Matcher fromHost4 = toFind8.matcher(contentStr);
-                            
-                            
-                            if(toHost1.find()){
-                                
-                            }
-                            //System.out.println(contentStr);
-                            
-                        } catch (UnsupportedEncodingException ex) {
-                            Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
-                        }
-                    }
-                }
-                else{
-                    if (packet.hasHeader(udp) && (udp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {
-                        try {
-                            byte[] content = udp.getPayload();
-                            String contentStr = new String(content, "UTF-8");
-                            Pattern toFind = Pattern.compile(toHost1); 
-                            Matcher toHost = toFind.matcher(contentStr);
-                            if(toHost.find()){
-                                System.out.println("WARNING -- Possible threat" + udp.toString());
-                            }
-                        } catch (UnsupportedEncodingException ex) {
-                            Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
-                        }
-                    }
-                }
-            }  
-        }, errbuf); 
-    }
-    public static void stateful(){
-        
+       
     }
     
     public static void warn(String tcp){
