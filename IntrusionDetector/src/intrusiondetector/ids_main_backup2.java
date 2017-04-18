@@ -23,7 +23,7 @@ import org.jnetpcap.protocol.tcpip.Udp;
  * 
  */
 
-public class ids {
+public class ids_main_backup2 {
     
     private static Boolean state;                   //True = stateless False = stateful
     private static Boolean proto;                   //True = TCP False = UDP 
@@ -71,50 +71,49 @@ public class ids {
                     if(proto){  //looking for tcp
                         if (packet.hasHeader(tcp) && (tcp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {        
 
-                            try {
-                                Pattern p0 = Pattern.compile(tfHost.get(0));
-                                byte[] content = tcp.getPayload();
-                                String contentStr = new String(content, "UTF-8");
-                                Matcher m0 = p0.matcher(contentStr);
+                            Pattern p0 = Pattern.compile(tfHost.get(0));
+                            byte[] content = tcp.getPayload();
+                            byte[] delim = "\\n".getBytes();
+                            String[] contentStr = new String(content).split(new String(delim));
+                            for (int i = 0; i < contentStr.length; i++) {
+
+                                Matcher m0 = p0.matcher(contentStr[i]);
                                 if (m0.find() && tfHost.get(numFound+1) == null) {
                                     warn(tcp.toString());
                                 }
                                 else if(m0.find()){
                                     numFound++;
                                     Pattern p1 = Pattern.compile(tfHost.get(numFound));
-                                    Matcher m1 = p1.matcher(contentStr);
+                                    Matcher m1 = p1.matcher(contentStr[i+numFound]);
                                     if (m1.find() && tfHost.get(numFound+1) == null) {
                                         warn(tcp.toString());
                                     }
                                     else if(m1.find()){
                                         numFound++;
                                         Pattern p2 = Pattern.compile(tfHost.get(numFound));
-                                        Matcher m2 = p1.matcher(contentStr);
+                                        Matcher m2 = p1.matcher(contentStr[i+numFound]);
                                         if (m2.find() && tfHost.get(numFound+1) == null) {
                                             warn(tcp.toString());
                                         }
                                         else if(m2.find()){
                                             numFound++;
                                             Pattern p3 = Pattern.compile(tfHost.get(numFound));
-                                            Matcher m3 = p1.matcher(contentStr);
+                                            Matcher m3 = p1.matcher(contentStr[i+numFound]);
                                             if (m3.find() && tfHost.get(numFound+1) == null) {
                                                 warn(tcp.toString());
-                                            }   
+                                            }
                                             else if(m3.find()){
                                                 numFound++;
                                                 Pattern p4 = Pattern.compile(tfHost.get(numFound));
-                                                Matcher m4 = p1.matcher(contentStr);
+                                                Matcher m4 = p1.matcher(contentStr[i+numFound]);
                                                 if (m4.find() && tfHost.get(numFound+1) == null) {
                                                     warn(tcp.toString());
-                                                }
+                                                }   
                                             }
                                         }
-
+                                        
                                     }
                                 }
-                                
-                            } catch (UnsupportedEncodingException ex) {
-                                Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
                             }
                         }
                     }
