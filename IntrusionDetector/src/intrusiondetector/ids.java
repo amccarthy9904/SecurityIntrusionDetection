@@ -37,6 +37,8 @@ public class ids {
     private static int numFound = 0;               //number of fields found
     private static String[] badPacs;                //packets found with violations in them
     
+    private static String[][] streamList = new String[1000][1000];           //list of all packets exchanged between host and all sender/reciever pairs
+    private static int numCon = 1;                                         //number of connections in list
     
     private static final Pattern hostP = Pattern.compile("host=(\\d*\\.\\d*\\.\\d*\\.\\d*)");
     private static final Pattern portP = Pattern.compile("host_port=(\\d{1,5})");
@@ -49,8 +51,11 @@ public class ids {
     
     public static void main(String[] args) throws IOException {
         
-        String fileName = "trace1.pcap";   //Replace with command line Args
-        String policyFileName = "blameAttack1.txt";     //Replace with command line Args
+        System.out.println("DISCLAIMER: plaintextPOP must be run as stateless");
+        System.out.println("DISCLAIMER: Getting jnetpcap to work was difficult, I'm not sure how well it will work on other machines");
+        
+        String fileName = "trace3.pcap";   //Replace with command line Args
+        String policyFileName = "blameAttac62.txt";     //Replace with command line Args
         
         final StringBuilder errbuf = new StringBuilder();
         Pcap pcap = Pcap.openOffline(fileName, errbuf);
@@ -80,33 +85,33 @@ public class ids {
                                 
                                 byte[] content = tcp.getPayload();
                                 String contentStr = new String(content, "UTF-8");
-                                //System.out.println(contentStr);
-                                //System.out.println("-------------------------");
                                 switch(numFound){
                                     case 0:
                                         Pattern p0 = Pattern.compile(tfHost.get(numFound));
                                         Matcher m0 = p0.matcher(contentStr);
                                         if (m0.find()) {
                                             
-                                            badPacs[numFound] = "d";
-                                            numFound++;
-                                            if(numFound == numToFind){
-                                                warn();
-                                                numFound = 0;
-                                            }
-                                        } 
-                                    case 1:
-                                        Pattern p1 = Pattern.compile(tfHost.get(numFound));
-                                        Matcher m1 = p1.matcher(contentStr);
-                                        if (m1.find()) {
-                                            
-                                            badPacs[numFound] = tcp.get;
+                                            badPacs[numFound] = contentStr;
                                             numFound++;
                                             if(numFound == numToFind){
                                                 warn();
                                                 numFound = 0;
                                             }
                                         }
+                                        break;
+                                    case 1:
+                                        Pattern p1 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m1 = p1.matcher(contentStr);
+                                        if (m1.find()) {
+                                            
+                                            badPacs[numFound] = contentStr;
+                                            numFound++;
+                                            if(numFound == numToFind){
+                                                warn();
+                                                numFound = 0;
+                                            }
+                                        }
+                                        break;
                                     case 2:
                                         Pattern p2 = Pattern.compile(tfHost.get(numFound));
                                         Matcher m2 = p2.matcher(contentStr);
@@ -119,6 +124,7 @@ public class ids {
                                                 numFound = 0;
                                             }
                                         }
+                                        break;
                                     case 3:
                                         Pattern p3 = Pattern.compile(tfHost.get(numFound));
                                         Matcher m3 = p3.matcher(contentStr);
@@ -131,6 +137,7 @@ public class ids {
                                                 numFound = 0;
                                             }
                                         }
+                                        break;
                                     case 4:
                                         Pattern p4 = Pattern.compile(tfHost.get(numFound));
                                         Matcher m4 = p4.matcher(contentStr);
@@ -143,6 +150,7 @@ public class ids {
                                                 numFound = 0;
                                             }
                                         }
+                                        break;
                                 }
                                 
                             } catch (UnsupportedEncodingException ex) {
@@ -150,50 +158,80 @@ public class ids {
                             }
                         }
                     }
-                    else{
+                    else{ //same as if(proto) except with udp
                         if ((packet.hasHeader(udp) && (udp.destination() == hostPort || hostPort == -1) && ( udp.source() == attackerPort || attackerPort == -1))               //if udp and sent from attacker to host
                                 || (packet.hasHeader(udp) && (udp.destination() == attackerPort || attackerPort == -1) && (udp.source() == hostPort || hostPort == -1))) {      //if udp and sent from host to attacker
 
                             try {
-                                Pattern p0 = Pattern.compile(tfHost.get(0));
+                                
                                 byte[] content = udp.getPayload();
                                 String contentStr = new String(content, "UTF-8");
-                                Matcher m0 = p0.matcher(contentStr);
-                                if (m0.find() && tfHost.get(numFound+1) == null) {
-                                    warn();
-                                }
-                                else if(m0.find()){
-                                    numFound++;
-                                    Pattern p1 = Pattern.compile(tfHost.get(numFound));
-                                    Matcher m1 = p1.matcher(contentStr);
-                                    if (m1.find() && tfHost.get(numFound+1) == null) {
-                                        warn();
-                                    }
-                                    else if(m1.find()){
-                                        numFound++;
-                                        Pattern p2 = Pattern.compile(tfHost.get(numFound));
-                                        Matcher m2 = p1.matcher(contentStr);
-                                        if (m2.find() && tfHost.get(numFound+1) == null) {
-                                            warn();
-                                        }
-                                        else if(m2.find()){
+                                switch(numFound){
+                                    case 0:
+                                        Pattern p0 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m0 = p0.matcher(contentStr);
+                                        if (m0.find()) {
+                                            
+                                            badPacs[numFound] = contentStr;
                                             numFound++;
-                                            Pattern p3 = Pattern.compile(tfHost.get(numFound));
-                                            Matcher m3 = p1.matcher(contentStr);
-                                            if (m3.find() && tfHost.get(numFound+1) == null) {
+                                            if(numFound == numToFind){
                                                 warn();
-                                            }   
-                                            else if(m3.find()){
-                                                numFound++;
-                                                Pattern p4 = Pattern.compile(tfHost.get(numFound));
-                                                Matcher m4 = p1.matcher(contentStr);
-                                                if (m4.find() && tfHost.get(numFound+1) == null) {
-                                                    warn();
-                                                }
+                                                numFound = 0;
                                             }
                                         }
-
-                                    }
+                                        break;
+                                    case 1:
+                                        Pattern p1 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m1 = p1.matcher(contentStr);
+                                        if (m1.find()) {
+                                            
+                                            badPacs[numFound] = contentStr;
+                                            numFound++;
+                                            if(numFound == numToFind){
+                                                warn();
+                                                numFound = 0;
+                                            }
+                                        }
+                                        break;
+                                    case 2:
+                                        Pattern p2 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m2 = p2.matcher(contentStr);
+                                        if (m2.find()) {
+                                            
+                                            badPacs[numFound] = contentStr;
+                                            numFound++;
+                                            if(numFound == numToFind){
+                                                warn();
+                                                numFound = 0;
+                                            }
+                                        }
+                                        break;
+                                    case 3:
+                                        Pattern p3 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m3 = p3.matcher(contentStr);
+                                        if (m3.find()) {
+                                            
+                                            badPacs[numFound] = contentStr;
+                                            numFound++;
+                                            if(numFound == numToFind){
+                                                warn();
+                                                numFound = 0;
+                                            }
+                                        }
+                                        break;
+                                    case 4:
+                                        Pattern p4 = Pattern.compile(tfHost.get(numFound));
+                                        Matcher m4 = p4.matcher(contentStr);
+                                        if (m4.find()) {
+                                            
+                                            badPacs[numFound] = contentStr;
+                                            numFound++;
+                                            if(numFound == numToFind){
+                                                warn();
+                                                numFound = 0;
+                                            }
+                                        }
+                                        break;
                                 }
                                 
                             } catch (UnsupportedEncodingException ex) {
@@ -204,10 +242,73 @@ public class ids {
                 }  
             }, errbuf); 
         }
-        else{
-            //stateful();
+        else{ //stateful();
+            pcap.loop(-1, new JPacketHandler<StringBuilder>() {                 //loop thu all the pkts
+            
+                final Tcp tcp = new Tcp();
+                final Udp udp = new Udp();
+                final Ip4 ip  = new Ip4();
+                @Override
+                //streamList [streamID][str of payload]
+                public void nextPacket(JPacket packet, StringBuilder errbuf) {  
+
+                        if ((packet.hasHeader(tcp) && (tcp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1))               //if tcp and sent from attacker to host
+                                || (packet.hasHeader(tcp) && (tcp.destination() == attackerPort || attackerPort == -1) && (tcp.source() == hostPort || hostPort == -1))){
+                            
+                            String streamID = Integer.toString(tcp.hashCode());
+                            
+                            for (int i = 0; i < numCon; i++) { //builds streamList keeps track of all payloads of packets seperated by who sent them to the host
+                                if(i == numCon - 1){ try {
+                                    //gone through list without finding streamID of packet
+                                    streamList[i][0] = streamID;
+                                    streamList[i][1] = new String(tcp.getPayload(), "UTF-8");
+                                    numCon++;
+                                    } catch (UnsupportedEncodingException ex) {
+                                        Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
+                                    }
+                                    break;
+                                }
+                                else if(streamList[i][0].equals(streamID)){ //put payload in next spot in this streamID's row
+                                    for (int j = 0; j < 500; j++) {
+                                        if(streamList[i][j] == null){ try {
+                                                streamList[i][j] = new String(tcp.getPayload(), "UTF-8");
+                                            } catch (UnsupportedEncodingException ex) {
+                                                Logger.getLogger(ids.class.getName()).log(Level.SEVERE, null, ex);
+                                            }
+                                            break;
+                                         }
+                                    }
+                                    break;
+                                }
+                            
+                            }
+                            
+                        }
+                }
+            }, errbuf);
+            
+            Pattern p0 = Pattern.compile(tfHost.get(0));
+            StringBuilder streamLoad = new StringBuilder();
+            for (int i = 0; i < streamList.length; i++) { ////complies all packet in streamlist into streamload
+                if(streamList[i][0] == null ){
+                    break;
+                } 
+                for (int j = 0; j < streamList.length; j++) {
+                    if(streamList[i][j] == null ){
+                        break;
+                    }
+                    streamLoad.append(streamList[i][j]);
+                }
+            }
+            
+            Matcher m0 = p0.matcher(streamLoad.toString());
+            if(m0.find()){
+                badPacs[0] = streamLoad.toString();
+                warn();
+            }
         }
     }
+        
     ///sets all policy parameter instance vars
     public static void setPolicy(BufferedReader br) throws IOException{
         
@@ -246,6 +347,7 @@ public class ids {
                 tfHost.put(numToFind, toHostM.group(1));
                 numToFind++;
             }
+            
             if (fromHostM.find()) {
                 tfHost.put(numToFind, fromHostM.group(1));
                 if(numToFind == 0){
@@ -264,9 +366,10 @@ public class ids {
             }
            
             line = br.readLine();
+        
         }while(line != null);
         
-        badPacs = new String[numToFind];            //creates badPacks tohold correct number of packets
+        badPacs = new String[numToFind];            //creates badPacs tohold correct number of packets
         System.out.println("type: " + state );
         System.out.println("proto: " + proto);
         System.out.println("host: " + host);
@@ -291,10 +394,7 @@ public class ids {
                     System.out.println("to_host: " + tfHost.get(i));
                 }
             }
-        }
-        
-        
-        
+        }   
     }
     
     public static BufferedReader getBR(String fileName){
@@ -311,152 +411,13 @@ public class ids {
         }
     }
     
-    public static void statfull(Pcap pcap, StringBuilder errbuf){
-        
-       
-    }
-    
     public static void warn(){
         System.out.println("WARNING -- Possible threat in the following packets: ");
         for (int i = 0; i < badPacs.length; i++) {
+            System.out.println("-------- Payload of Packet --------");
             System.out.println(badPacs[i]);
         }
     }
     
     
 }
-       
-      
-////         pcap.loop(-1, new JPacketHandler<StringBuilder>() {                 //loop thu all the pkts
-//            
-//            final Tcp tcp = new Tcp();
-//            final Udp udp = new Udp();
-//            final Ip4 ip = new Ip4();
-//  
-//            public void nextPacket(JPacket packet, StringBuilder errbuf) {  
-//                
-//                if(proto){  //looking for tcp
-//                    if (packet.hasHeader(tcp) && (tcp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {        try {
-//                        //if syn pkt
-//
-//                        InetAddress addr = InetAddress.getByAddress(ip.source());
-//                        if(synTable.containsKey(addr.getHostAddress())){             //if ip in table iterate num synpkts
-//
-//
-//                            synTable.put(addr.getHostAddress(), synTable.get(addr.getHostAddress()) +1);
-//                            //System.out.println(ip.sourceToInt());
-//                        }
-//                        else{                                                   //if ip not in table add and set val to 1
-//                            synTable.put(addr.getHostAddress(), 1);
-//                            //System.out.println(ip.sourceToInt());
-//                        }} catch (UnknownHostException ex) {
-//                            Logger.getLogger(scannerfinder.class.getName()).log(Level.SEVERE, null, ex);
-//                        }
-//
-//                    }
-//                }
-//                else{
-//                    if (packet.hasHeader(udp) && (udp.destination() == hostPort || hostPort == -1) && ( tcp.source() == attackerPort || attackerPort == -1)) {
-//                    
-//                    }
-//                }
-//                    
-//                
-//                
-//                
-//                
-//                
-//                
-//                else if (packet.hasHeader(tcp) && tcp.flags() == 0x012 && packet.hasHeader(ip)) {        try {
-//                    //if synack pkt
-//                    InetAddress addr = InetAddress.getByAddress(ip.destination());
-//                    if(ackTable.containsKey(addr.getHostAddress())){             //if ip in table iterate num ackpkts 
-//                        ackTable.put(addr.getHostAddress(), ackTable.get(addr.getHostAddress()) +1);
-//                        //System.out.println(ip.sourceToInt());
-//                    }
-//                    else{                                                   //if ip not in table add and set val to 1
-//                        ackTable.put(addr.getHostAddress(), 1);
-//                        //System.out.println(ip.sourceToInt());
-//                    }
-//                    } catch (UnknownHostException ex) {
-//                        Logger.getLogger(scannerfinder.class.getName()).log(Level.SEVERE, null, ex);
-//                    }
-//                    
-//                }
-//   
-//            }  
-//  
-//        }, errbuf); 
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//            final String fileName = "lbl-internal.20041004-1305.port002.dump.pcap"; //TODO make this command line
-//        final StringBuilder errbuf = new StringBuilder();
-//        Pcap pcap = Pcap.openOffline(fileName, errbuf);
-//        if (pcap == null) {  
-//            System.err.println(errbuf); 
-//            return;  
-//        }
-//        Map<String, Integer> synTable = new HashMap<String, Integer>();           //tables to store num synpkts and ackpkts sent by each ip
-//        Hashtable<String, Integer> ackTable = new Hashtable<String, Integer>();
-//        
-//        pcap.loop(-1, new JPacketHandler<StringBuilder>() {                 //loop thu all the pkts
-//            final Tcp tcp = new Tcp();  
-//            final Ip4 ip = new Ip4();
-//  
-//            public void nextPacket(JPacket packet, StringBuilder errbuf) {  
-//                
-//                if (packet.hasHeader(tcp) && tcp.flags() == 0x002 && packet.hasHeader(ip)) {        try {
-//                    //if syn pkt
-//                    
-//                    InetAddress addr = InetAddress.getByAddress(ip.source());
-//                    if(synTable.containsKey(addr.getHostAddress())){             //if ip in table iterate num synpkts
-//                        
-//                        
-//                        synTable.put(addr.getHostAddress(), synTable.get(addr.getHostAddress()) +1);
-//                        //System.out.println(ip.sourceToInt());
-//                    }
-//                    else{                                                   //if ip not in table add and set val to 1
-//                        synTable.put(addr.getHostAddress(), 1);
-//                        //System.out.println(ip.sourceToInt());
-//                    }} catch (UnknownHostException ex) {
-//                        Logger.getLogger(scannerfinder.class.getName()).log(Level.SEVERE, null, ex);
-//                    }
-//                    
-//                }
-//                else if (packet.hasHeader(tcp) && tcp.flags() == 0x012 && packet.hasHeader(ip)) {        try {
-//                    //if synack pkt
-//                    InetAddress addr = InetAddress.getByAddress(ip.destination());
-//                    if(ackTable.containsKey(addr.getHostAddress())){             //if ip in table iterate num ackpkts 
-//                        ackTable.put(addr.getHostAddress(), ackTable.get(addr.getHostAddress()) +1);
-//                        //System.out.println(ip.sourceToInt());
-//                    }
-//                    else{                                                   //if ip not in table add and set val to 1
-//                        ackTable.put(addr.getHostAddress(), 1);
-//                        //System.out.println(ip.sourceToInt());
-//                    }
-//                    } catch (UnknownHostException ex) {
-//                        Logger.getLogger(scannerfinder.class.getName()).log(Level.SEVERE, null, ex);
-//                    }
-//                    
-//                }
-//   
-//            }  
-//  
-//        }, errbuf); 
-//        
-//    for (String key : synTable.keySet()) {
-//        if(!ackTable.containsKey(key) || synTable.get(key) >= 3 * ackTable.get(key) ){
-//            System.out.println(key);
-//        }
-//    }
-//  
-//        pcap.close();  
-  
